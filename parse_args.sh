@@ -5,12 +5,25 @@ shopt -s extglob
 
 
 parse_args() {
-  local type expected
+  if [[ -n "${KW_ARGS[*]}" ]] || [[ -n "${NAMED_ARGS[*]}" ]] || [[ -n "${ARGS[*]}" ]]
+  then
+    if [[ "${BASHARGS_ALLOW_OVERRIDE}" != "true" ]]
+    then
+      echo "$BASHARGS_ALLOW_OVERRIDE"
+      echo 'ERROR: Parsed arguments from a previous run of parse_args have been found (KW_ARGS, NAMED_ARGS or ARGS)!' \
+        'If you really want to override these variables set BASHARGS_ALLOW_OVERRIDE=true' >&2
+      return 54
+    fi
+  fi
+
+  clear_args
+
+  local expected=""
   local should_print_help="false"
-  [[ -n "$KEYWORDS" ]] || declare -a KEYWORDS
-  [[ -n "$REQUIRED" ]] || declare -a REQUIRED
+  [[ -n "$KEYWORDS" ]] || declare -a KEYWORDS=()
+  [[ -n "$REQUIRED" ]] || declare -a REQUIRED=()
   local required=("${REQUIRED[@]}")
-  local kw_names arg_config kw_name
+  local kw_names arg_config kw_name type
   declare -A KW_MAP
   declare -A KW_TYPE
   declare -A NAMED_TYPE
@@ -26,7 +39,7 @@ parse_args() {
     IFS=';' read -ra arg_config <<<"$kw"
     IFS='|' read -ra kw_names <<<"${arg_config[0]}"
 
-    [[ -n "${kw_names[0]}" ]] || { echo "Error parsing configuration for keyword argument '$kw'!"; return 53; }
+    [[ -n "${kw_names[0]}" ]] || { echo "Error parsing configuration for keyword argument '$kw'!" >&2; return 53; }
     for kw_name in "${kw_names[@]}"
     do
       KW_MAP["$kw_name"]="${kw_names[0]}"
@@ -65,7 +78,7 @@ parse_args() {
     then
       if [[ "$type" == "int" ]] && ! test "$arg" -eq "$arg" 2> /dev/null
       then
-        echo "ERROR: Expected a number but got '$arg'!"
+        echo "ERROR: Expected a number but got '$arg'!" >&2
         echo ""
         print_usage
         return 52
@@ -76,7 +89,7 @@ parse_args() {
         then
           KW_ARGS["$expected"]="${KW_ARGS["$expected"]}$newline$arg"
         else
-          echo "ERROR: Duplicate argument '$expected'!"
+          echo "ERROR: Duplicate argument '$expected'!" >&2
         fi
       else  
         KW_ARGS["$expected"]="$arg"
@@ -120,7 +133,7 @@ parse_args() {
     return 50
   elif [[ -n "${required[0]}" ]]
   then
-      echo "ERROR: The following required arguments are missing: ${required[*]%;*}"
+      echo "ERROR: The following required arguments are missing: ${required[*]%;*}" >&2
       print_usage
       return 51
   fi
@@ -166,7 +179,8 @@ print_usage() {
     do
       if [[ -n "${usage[$arg]}" ]]
       then
-        echo "    $arg    ${usage[$arg]}"
+        printf %-20s "    ${arg}"
+        echo " ${usage[$arg]}"
         unset usage["$arg"]
       fi
     done
@@ -211,6 +225,8 @@ print_usage() {
         if [[ "$type" == "list" ]]
         then
           addition="(Can be supplied multiple times)"
+        else
+          addition=""
         fi
 
         if [[ -n "${usage["$kw_name"]}" ]]
@@ -244,5 +260,14 @@ find_caller() {
   done
   echo "WARN: No caller found!" >&2
   return 1
+}
+
+clear_args() {
+  unset KW_ARGS
+  unset NAMED_ARGS
+  unset ARGS
+  unset KW_MAP
+  unset KW_TYPE
+  unset NAMED_TYPE
 }
 
