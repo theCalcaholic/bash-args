@@ -58,7 +58,7 @@ parse_args() {
         echo "ERROR: Expected a number but got '$arg'!"
         echo ""
         print_usage
-        exit 52
+        return 52
       fi
       KW_ARGS["$expected"]="$arg"
       expected=""
@@ -102,12 +102,12 @@ parse_args() {
     print_description
     echo ""
     print_usage
-    exit 0
+    return 50
   elif [[ -n "$REQUIRED" ]]
   then
       echo "ERROR: The following required arguments are missing: ${REQUIRED[*]%;*}"
       print_usage
-      exit 51
+      return 51
   fi
 
 

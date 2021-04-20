@@ -32,8 +32,8 @@ KEYWORDS=("--config" "--interactive;bool" "-i;bool" "--sleep;int" "-s;int")
 REQUIRED=("username")
 # Source the library
 . ./parse_args.sh
-# Parse all arguments in "$@"
-parse_args __USAGE "$USAGE" __DESCRIPTION "$DESCRIPTION" "$@"
+# Parse all arguments in "$@" or exit if there are parsing errors
+parse_args __USAGE "$USAGE" __DESCRIPTION "$DESCRIPTION" "$@" || exit $?
 
 # Show the usage message on specific exit codes in your script
 set_trap 1 2
