@@ -15,8 +15,6 @@ If you want to create a self-contained script with this library, you could use [
 Example (You can find this and more examples in the [examples](./examples) folder):
 
 ```bash
-#!/usr/bin/env bash
-
 # Source the library
 . "$(cd "${BASH_SOURCE[0]%/*}/.."; pwd)/parse_args.sh"
 
@@ -29,13 +27,15 @@ REQUIRED=("username")
 # Define a description which will be used in the --help message
 DESCRIPTION="A dummy function to showcase the bash-args library"
 
-# Define usage information for your arguments which will be used in the --help message and during argument parsing errors
+# Define usage information for your arguments which will be used in the aut-generated usage message, e.g. when the --help argument was given
+# Alternatively, you can define USAGE as a single string which will then replace the usage message generator
 declare -A USAGE
 USAGE[--config]="Read configuration from a file"
 USAGE['-i']="Ask before doing anything dangerous"
 USAGE['-s']="Sleep <number> seconds before doing anything" # Always use the first parameter name in your script if there are aliases
 USAGE[username]="Your username"
 USAGE["--letter"]="Provide some letters"
+# Optionally, you can also set USAGE['COMMAND']. Otherwise, parse-args will defer the command name from your script
 
 # Parse all arguments in "$@" and exit if there are parsing errors
 parse_args "$@" || exit $?
@@ -48,7 +48,10 @@ set_trap 1 2
 echo "Your arguments:"
 echo "username: ${NAMED_ARGS['username']}"
 echo "config: ${KW_ARGS['--config']}"
-echo "interactive: ${KW_ARGS['-i']}" # will always be set, because bools have a default value of "false"
+# -i will always be set, because bools have a default value of "false"
+echo "interactive: ${KW_ARGS['-i']}" 
+# list type arguments allow you to supply the argument multiple times. The arguments will be stored to KW_ARGS 
+# separated by newlines
 echo "Your letters: ${KW_ARGS['--letter']//$'\n'/, }"
 
 # Set a default value for the sleep argument

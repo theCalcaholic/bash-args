@@ -118,7 +118,7 @@ parse_args() {
     echo ""
     print_usage
     return 50
-  elif [[ -n "$required" ]]
+  elif [[ -n "${required[0]}" ]]
   then
       echo "ERROR: The following required arguments are missing: ${required[*]%;*}"
       print_usage
@@ -130,18 +130,24 @@ parse_args() {
 
 print_usage() {
 
-    if [[ -n "${USAGE['NAME']}" ]]
+    if ! [[ "$(declare -p USAGE)" =~ "declare -A" ]]
     then
-      name="${USAGE['NAME']}" ]]
+      echo "$USAGE"
+      return 0
+    fi
+
+    if [[ -n "${USAGE['COMMAND']}" ]]
+    then
+      name="${USAGE['COMMAND']}"
     else
       name="$(basename "$(find_caller)")"
     fi
-    kws=(${KEYWORDS[@]/#/[})
-    kws=(${kws[@]/%;*/})
+    kws=("${KEYWORDS[@]/#/[}")
+    kws=("${kws[@]/%;*/}")
 
     echo "USAGE:"
     echo -n "  $name "
-    echo -n "${kws[@]/%/]} "
+    echo -n "${kws[*]/%/]} "
     echo "${REQUIRED[@]}"
     
     if [[ "${#USAGE[@]}" -eq 0 ]]
@@ -161,7 +167,7 @@ print_usage() {
       if [[ -n "${usage[$arg]}" ]]
       then
         echo "    $arg    ${usage[$arg]}"
-        unset "usage["$arg"]"
+        unset usage["$arg"]
       fi
     done
 
