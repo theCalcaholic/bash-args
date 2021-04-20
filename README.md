@@ -12,28 +12,33 @@ Written originally for my own [bash-utils][bash-utils-repo].
 Source the library, then define keyword and required arguments and call the `parse_args` function.
 If you want to create a self-contained script with this library, you could use [bundle-script.sh][bundle-script] (which is what I do myself).
 
+Example (You can find this and more examples in the [examples](./examples) folder):
+
 ```bash
-# Define a description which will be used in the --help message
-DESCRIPTION="A dummy function to showcase the bash-args library"
-# Define a usage message which will be used in the --help message and during argument parsing errors
-USAGE="my_example_func [OPTIONS] username
+#!/usr/bin/env bash
 
-  username
-    Your username
-  
-  Options
-    --config file        Read configuration from a file
-    -i, --interactive    Ask before doing anything dangerous
-    -s, --sleep duration Sleep <duration> seconds before doing anything"
+# Source the library
+. "$(cd "${BASH_SOURCE[0]%/*}/.."; pwd)/parse_args.sh"
 
-# Define the keywords to use for (optional keyword arguments
-KEYWORDS=("--config" "--interactive;bool" "-i;bool" "--sleep;int" "-s;int")
+# Define the keywords to use for (optional) keyword arguments. You can define aliases by separating parameter names with the pipe symbol |
+# If using aliases, you for all purposes the first name in the list will be used (see below)
+KEYWORDS=("--config" "-i|--interactive;bool" "-s|--sleep;int" "--letter;list")
 # Define required positional arguments
 REQUIRED=("username")
-# Source the library
-. ./parse_args.sh
-# Parse all arguments in "$@" or exit if there are parsing errors
-parse_args __USAGE "$USAGE" __DESCRIPTION "$DESCRIPTION" "$@" || exit $?
+
+# Define a description which will be used in the --help message
+DESCRIPTION="A dummy function to showcase the bash-args library"
+
+# Define usage information for your arguments which will be used in the --help message and during argument parsing errors
+declare -A USAGE
+USAGE[--config]="Read configuration from a file"
+USAGE['-i']="Ask before doing anything dangerous"
+USAGE['-s']="Sleep <number> seconds before doing anything" # Always use the first parameter name in your script if there are aliases
+USAGE[username]="Your username"
+USAGE["--letter"]="Provide some letters"
+
+# Parse all arguments in "$@" and exit if there are parsing errors
+parse_args "$@" || exit $?
 
 # Show the usage message on specific exit codes in your script
 set_trap 1 2
@@ -43,13 +48,13 @@ set_trap 1 2
 echo "Your arguments:"
 echo "username: ${NAMED_ARGS['username']}"
 echo "config: ${KW_ARGS['--config']}"
-echo "interactive: ${KW_ARGS['--interactive']-${KW_ARGS['-i']}}"
+echo "interactive: ${KW_ARGS['-i']}" # will always be set, because bools have a default value of "false"
+echo "Your letters: ${KW_ARGS['--letter']//$'\n'/, }"
 
 # Set a default value for the sleep argument
-sleep="${KW_ARGS['--sleep']-${KW_ARGS['-s']}}"
-sleep="${sleep-0}"
+sleep="${KW_ARGS['-s']:-0}"
 echo "sleep: $sleep"
-echo "any other args you provided: ${ARGS[@]}"
+echo "any other args you provided: ${ARGS[*]}"
 ```
 
 ### What does this get me?
@@ -59,71 +64,71 @@ Let's say, you saved the example above as `example.sh` (don't forget adding a sh
 1. If you to call your script with `--help`, you get your usage instructions:
 
   ```sh
-  $ ./example.sh --help
+  $ ./examples/demo.sh --help
   A dummy function to showcase the bash-args library
-
+  
   USAGE:
-    my_example_func [OPTIONS] username
-
-    username
-      Your username
-
-    Options
-      --config file        Read configuration from a file
-      -i, --interactive    Ask before doing anything dangerous
-      -s, --sleep duration Sleep <duration> seconds before doing anything
+    demo.sh [--config] [-i|--interactive] [-s|--sleep] [--letter] username
+      username    Your username
+  
+    OPTIONS:
+      --sleep <number>, -s <number>    Sleep <number> seconds before doing anything
+      --config <value>                 Read configuration from a file
+      --interactive, -i                Ask before doing anything dangerous
+      --letter <value>                 Provide some letters (Can be supplied multiple times)
   ```
 
 2. If you call it without the required positional argument `username`, you get an error:
 
   ```sh
-  $ ./example.sh 
+  $ ./examples/demo.sh
   ERROR: The following required arguments are missing: username
   USAGE:
-    my_example_func [OPTIONS] username
-
-    username
-      Your username
-
-    Options
-      --config file        Read configuration from a file
-      -i, --interactive    Ask before doing anything dangerous
-      -s, --sleep duration Sleep <duration> seconds before doing anything
+    demo.sh [--config] [-i|--interactive] [-s|--sleep] [--letter] username
+      username    Your username
+  
+    OPTIONS:
+      --sleep <number>, -s <number>    Sleep <number> seconds before doing anything
+      --config <value>                 Read configuration from a file
+      --interactive, -i                Ask before doing anything dangerous
+      --letter <value>                 Provide some letters (Can be supplied multiple times)
   ```
 
 3. If you call it with an invalid (non-int) argument for `-s` or `--sleep`, you get an error:
 
   ```sh
-  $ ./example.sh thecalcaholic -s notanumber
-  ERROR: Expected a number but got 'notanumber'!
-
+  $ ./examples/demo.sh -s five
+  ERROR: Expected a number but got 'five'!
+  
   USAGE:
-    my_example_func [OPTIONS] username
-
-    username
-      Your username
-
-    Options
-      --config file        Read configuration from a file
-      -i, --interactive    Ask before doing anything dangerous
-      -s, --sleep duration Sleep <duration> seconds before doing anything
+    demo.sh [--config] [-i|--interactive] [-s|--sleep] [--letter] username
+      username    Your username
+  
+    OPTIONS:
+      --sleep <number>, -s <number>    Sleep <number> seconds before doing anything
+      --config <value>                 Read configuration from a file
+      --interactive, -i                Ask before doing anything dangerous
+      --letter <value>                 Provide some letters (Can be supplied multiple times)
   ```
 
 4. If you call it with proper arguments, it does what it's supposed to:
 
   ```sh
-  $ ./example.sh thecalcaholic -s 5 extra --config /home/thecalcaholic/example_config.json -i
+  $ ./examples/demo.sh thecalcaholic -s 5 extra --config /home/thecalcaholic/example_config.json -i --letter a --letter b --letter c
   Your arguments:
   username: thecalcaholic
   config: /home/thecalcaholic/example_config.json
   interactive: true
+  Your letters: a, b, c
   sleep: 5
   any other args you provided: extra
   ```
 
 ## Roadmap
 
-* Automatically generated usage messages
+* typed lists
+* type checking/support for named (required) arguments
+* some kind of automatic tests
 
 [gh-issues]: https://github.com/theCalcaholic/bash-args/issues
 [bash-utils-repo]: https://github.com/theCalcaholic/bash-utils

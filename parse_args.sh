@@ -3,55 +3,65 @@
 __BASHARGS_DEBUG=
 shopt -s extglob
 
-get_type_if_exists() {
-
-  local type cut
-  local debug="$__BASHARGS_DEBUG"
-  [[ -z "$debug" ]] || echo "get_type_if_exists $@" >&2 
-   
-  if [[ "${1?}" == "kw-arg" ]] && [[ " ${KEYWORDS[*]} " =~ .*" ${2?}"(";"|" ").* ]]
-  then
-    cut="${KEYWORDS[*]}"
-  elif [[ "${1?}" == "named-arg" ]] && [[ " ${REQUIRED[*]} " =~ .*" ${2?}"(";"|" ").* ]]
-  then
-    cut=" ${REQUIRED[*]} "
-  fi
-
-  if [[ -n "$cut" ]]
-  then
-    cut="${cut#*( )${2}}"
-    [[ -z "$debug" ]] || echo "  1. |${cut}|" >&2
-    if [[ "$cut" =~ ^";".* ]]
-    then
-      type="${cut%% *}"
-      [[ -z "$debug" ]] || echo "  2. |${type}|" >&2
-      type="${type#*;}"
-      [[ -z "$debug" ]] || echo "  3. |${type}|" >&2
-    fi
-    [[ -z "$debug" ]] || echo "  ${type:-string}" >&2
-    echo -n "${type:-string}"
-    return 0
-  fi
-
-  [[ -z "$debug" ]] || echo "  not found" >&2
-  return 1
-    
-}
 
 parse_args() {
-  #local keywords=("--project" "--region" "--zone" "--machine-type")
   local type expected
   local should_print_help="false"
   [[ -n "$KEYWORDS" ]] || declare -a KEYWORDS
   [[ -n "$REQUIRED" ]] || declare -a REQUIRED
+  local required=("${REQUIRED[@]}")
+  local kw_names arg_config kw_name
+  declare -A KW_MAP
+  declare -A KW_TYPE
+  declare -A NAMED_TYPE
   declare -xAg KW_ARGS
   declare -xAg NAMED_ARGS
   declare -xag ARGS
+  local newline="
+"
+
+  for kw in "${KEYWORDS[@]}"
+  do
+
+    IFS=';' read -ra arg_config <<<"$kw"
+    IFS='|' read -ra kw_names <<<"${arg_config[0]}"
+
+    [[ -n "${kw_names[0]}" ]] || { echo "Error parsing configuration for keyword argument '$kw'!"; return 53; }
+    for kw_name in "${kw_names[@]}"
+    do
+      KW_MAP["$kw_name"]="${kw_names[0]}"
+    done
+    KW_TYPE["${kw_names[0]}"]="${arg_config[1]:-string}"
+
+  done
+
+  for arg in "${REQUIRED[@]}"
+  do
+    IFS=';' read -ra arg_config <<<"$arg"
+    NAMED_TYPE["${arg_config[0]}"]="${arg_config[1]:-string}"
+  done
+
+  if [[ -n "$__BASHARGS_DEBUG" ]]
+  then
+    echo "named args:"
+    for arg in "${!NAMED_TYPE[@]}"
+    do
+      echo "  $arg (${NAMED_TYPE["$arg"]})"
+    done
+
+    echo "keyword args:"
+    for kw in "${!KW_MAP[@]}"
+    do
+      kw_name="${KW_MAP["$kw"]}"
+      echo "  $kw -> $kw_name (${KW_TYPE[$kw_name]})"
+    done
+    echo ""
+  fi
 
   for arg in "$@"
   do
 
-    if [[ -n "$expected" ]]
+    if [[ -n "$expected" ]] # we're expecting the value for a kw arg
     then
       if [[ "$type" == "int" ]] && ! test "$arg" -eq "$arg" 2> /dev/null
       then
@@ -60,24 +70,29 @@ parse_args() {
         print_usage
         return 52
       fi
-      KW_ARGS["$expected"]="$arg"
+      if [[ -n "${KW_ARGS["$expected"]}" ]]
+      then
+        if [[ "$type" == "list" ]]
+        then
+          KW_ARGS["$expected"]="${KW_ARGS["$expected"]}$newline$arg"
+        else
+          echo "ERROR: Duplicate argument '$expected'!"
+        fi
+      else  
+        KW_ARGS["$expected"]="$arg"
+      fi
       expected=""
       type=""
-    elif [[ "__USAGE" == "$arg" ]]
+    elif [[ -n "${KW_MAP["$arg"]}" ]]
     then
-      type="string"
-      expected="USAGE"
-    elif [[ "__DESCRIPTION" == "$arg" ]]
-    then
-      type="string"
-      expected="DESCRIPTION"
-    elif type="$(get_type_if_exists kw-arg "$arg")"
-    then
+      kw_name="${KW_MAP["$arg"]}"
+      type="${KW_TYPE["$kw_name"]}"
+
       if [[ "$type" == "bool" ]]
       then
-        KW_ARGS["$arg"]="true"
+        KW_ARGS["$kw_name"]="true"
       else
-        expected="$arg"
+        expected="$kw_name"
       fi
     else
       if [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]]
@@ -86,11 +101,11 @@ parse_args() {
         should_print_help="true"
       fi
 
-      if [[ -n "$REQUIRED" ]]
+      if [[ -n "${required[0]}" ]]
       then
-        type="$(get_type_if_exists named-arg "$REQUIRED")"
-        NAMED_ARGS["$REQUIRED"]="$arg"
-        REQUIRED=("${REQUIRED[@]:1}")
+        type="${NAMED_TYPE["${required[0]}"]}"
+        NAMED_ARGS["$required"]="$arg"
+        required=("${required[@]:1}")
       else
         ARGS+=("$arg")
       fi
@@ -103,9 +118,9 @@ parse_args() {
     echo ""
     print_usage
     return 50
-  elif [[ -n "$REQUIRED" ]]
+  elif [[ -n "$required" ]]
   then
-      echo "ERROR: The following required arguments are missing: ${REQUIRED[*]%;*}"
+      echo "ERROR: The following required arguments are missing: ${required[*]%;*}"
       print_usage
       return 51
   fi
@@ -114,25 +129,114 @@ parse_args() {
 }
 
 print_usage() {
+
+    if [[ -n "${USAGE['NAME']}" ]]
+    then
+      name="${USAGE['NAME']}" ]]
+    else
+      name="$(basename "$(find_caller)")"
+    fi
+    kws=(${KEYWORDS[@]/#/[})
+    kws=(${kws[@]/%;*/})
+
     echo "USAGE:"
-    echo "  ${KW_ARGS[USAGE]:-"<No usage message found>"}"
+    echo -n "  $name "
+    echo -n "${kws[@]/%/]} "
+    echo "${REQUIRED[@]}"
+    
+    if [[ "${#USAGE[@]}" -eq 0 ]]
+    then
+      return 0
+    fi
+
+    local usage
+    declare -A usage
+    for key in "${!USAGE[@]}"
+    do
+      usage["$key"]="${USAGE["$key"]}"
+    done
+
+    for arg in "${REQUIRED[@]}"
+    do
+      if [[ -n "${usage[$arg]}" ]]
+      then
+        echo "    $arg    ${usage[$arg]}"
+        unset "usage["$arg"]"
+      fi
+    done
+
+    if [[ "${#usage[@]}" -ne 0 ]]
+    then
+      echo ""
+      echo "  OPTIONS:"
+      local kw_summaries kw_name placeholder kw_names_width
+      declare -A kw_summaries
+      kw_names_width=0
+      for kw in "${!KW_MAP[@]}";
+      do
+        kw_name="${KW_MAP["$kw"]}"
+        
+        type="${KW_TYPE["$kw_name"]}"
+        if [[ "$type" == "string" ]] || [[ "$type" == "list" ]]
+        then
+          placeholder=" <value>"
+        elif [[ "$type" == "int" ]]
+        then
+          placeholder=" <number>"
+        else
+          placeholder=""
+        fi
+
+        if [[ -z "${kw_summaries["$kw_name"]}" ]]
+        then
+          kw_summaries["$kw_name"]="$kw${placeholder:-}"
+        else
+          kw_summaries["$kw_name"]="${kw_summaries["$kw_name"]}, $kw${placeholder:-      }"
+        fi
+        kw_summary="${kw_summaries["$kw_name"]}"
+        [[ ${#kw_summary} -lt ${kw_names_width} ]] || kw_names_width=${#kw_summary}
+      done
+
+      for kw_name in "${!kw_summaries[@]}";
+      do
+        kw_summary="${kw_summaries["$kw_name"]}"
+        type="${KW_TYPE["$kw_name"]}"
+
+        if [[ "$type" == "list" ]]
+        then
+          addition="(Can be supplied multiple times)"
+        fi
+
+        if [[ -n "${usage["$kw_name"]}" ]]
+        then
+          printf %-$(( kw_names_width + 4))s "    ${kw_summary}"
+          echo "    ${usage[$kw_name]}${addition:+ ${addition}}"
+        fi
+      done
+    fi
+
+    # echo "  ${KW_ARGS[USAGE]:-"<No usage message found>"}"
 }
 
 print_description() {
-    echo "${KW_ARGS[DESCRIPTION]:-"<No description found>"}"
+    echo "${DESCRIPTION:-"<No description found>"}"
 }
 
 set_trap() {
   trap "[[ ' $* ' =~ \$? ]] && { echo ""; print_usage; }" EXIT 
 }
 
-wait_for_enter() {
-    while true
-    do
-        read -s -N 1 -t 1 key || true
-        if [[ "$key" == $'\x0a' ]]
-        then
-            break;
-        fi
-    done
+find_caller() {
+
+  for candidate in "${BASH_SOURCE[@]}";
+  do
+    if ! [[ "$(realpath $candidate)" == "$(realpath ${BASH_SOURCE[0]})" ]]
+    then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  echo "WARN: No caller found!" >&2
+  return 1
 }
+
