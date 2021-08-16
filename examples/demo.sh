@@ -20,6 +20,7 @@ USAGE['-i']="Ask before doing anything dangerous"
 USAGE['-s']="Sleep <number> seconds before doing anything" # Always use the first parameter name in your script if there are aliases
 USAGE[username]="Your username"
 USAGE["--letter"]="Provide some letters"
+USAGE[extra]="An optional, positional argument"
 # Optionally, you can also set USAGE['COMMAND']. Otherwise, parse-args will defer the command name from your script
 
 # Parse all arguments in "$@" and exit if there are parsing errors

@@ -149,6 +149,15 @@ print_usage() {
       return 0
     fi
 
+    declare -a extra_args
+    for arg in "${!USAGE[@]}"
+    do
+      if ! [[ " $REQUIRED " =~ .*" $arg ".* ]] && ! [[ " ${KEYWORDS[@]/%;*/} " =~ .*(" "|"|")"$arg"(" "|"|").* ]] 
+      then
+        extra_args+=("$arg")
+      fi
+    done
+
     if [[ -n "${USAGE['COMMAND']}" ]]
     then
       name="${USAGE['COMMAND']}"
@@ -161,7 +170,9 @@ print_usage() {
     echo "USAGE:"
     echo -n "  $name "
     echo -n "${kws[*]/%/]} "
-    echo "${REQUIRED[@]}"
+    echo -n "${REQUIRED[@]} "
+    printf "[%s] " "${extra_args[@]}"
+    echo ""
     
     if [[ "${#USAGE[@]}" -eq 0 ]]
     then
@@ -175,7 +186,19 @@ print_usage() {
       usage["$key"]="${USAGE["$key"]}"
     done
 
+    # Print required args
     for arg in "${REQUIRED[@]}"
+    do
+      if [[ -n "${usage[$arg]}" ]]
+      then
+        printf %-20s "    ${arg}"
+        echo " ${usage[$arg]}"
+        unset usage["$arg"]
+      fi
+    done
+
+    # Print extra args
+    for arg in "${extra_args[@]}"
     do
       if [[ -n "${usage[$arg]}" ]]
       then
