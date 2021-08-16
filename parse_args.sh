@@ -169,9 +169,9 @@ print_usage() {
 
     echo "USAGE:"
     echo -n "  $name "
-    echo -n "${kws[*]/%/]} "
-    echo -n "${REQUIRED[@]} "
-    printf "[%s] " "${extra_args[@]}"
+    [[ -z "${kws[*]}" ]]        || echo -n "${kws[*]/%/]} "
+    [[ -z "${REQUIRED[*]}" ]]   || echo -n "${REQUIRED[@]} "
+    [[ -z "${extra_args[*]}" ]] || printf "[%s] " "${extra_args[@]}"
     echo ""
     
     if [[ "${#USAGE[@]}" -eq 0 ]]
