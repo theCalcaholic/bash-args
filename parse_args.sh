@@ -183,6 +183,7 @@ print_usage() {
     declare -A usage
     for key in "${!USAGE[@]}"
     do
+      [[ "$key" != "COMMAND" ]] || continue
       usage["$key"]="${USAGE["$key"]}"
     done
 
